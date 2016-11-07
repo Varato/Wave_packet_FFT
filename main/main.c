@@ -6,7 +6,6 @@
 
 #define PI 3.141592653589793
 #define a 7.0710678118654755
-// #define x_step 0.001
 #define x_min -1200.0
 #define x_max 1200.0
 #define dt 0.05
@@ -35,40 +34,49 @@ fftw_plan fft, ifft;    // fft plan for fftw
 int main(int argc, char const **argv)
 {
 	x_step = (double)(x_max-x_min)/(double)N;
-	double E0;
+	double E0[argc-1];
 	FILE *f;
-	int i=0;
+	int i, k;
 	double T, pl, pr;
-	if(argv[1]){
-		E0=atof(argv[1]);
+	if(argv){
+		for(i=0; i<argc-1; i++)
+			E0[i]=atof(argv[i+1]);
 	}
 	else{
-		printf("needs one argument\n");
+		printf("needs at least one argument\n");
 		return 1;
 	}
-	p0 = sqrt(2*E0);
-	fft = fftw_plan_dft_1d(N, wave_packet, p_wave_packet, FFTW_FORWARD, FFTW_MEASURE);
-	ifft = fftw_plan_dft_1d(N, p_wave_packet, wave_packet, FFTW_BACKWARD, FFTW_MEASURE);
-	initialize();
-	f=fopen("result", "w");	
-	write_file(f);
-	while(1){
-		i++;
-		printf("evolved step: %d\n", i);
-		evolve();
-		pl=wave_packet[0]*conj(wave_packet[0]);
-		pr=wave_packet[N-1]*conj(wave_packet[N-1]);
-		//Make sure the wavepacket will not spread out
-		if(pr >= 1e-7 || pl >= 1e-7) break;   
-		if(i%10==0)
-			write_file(f);
+
+	for (i=0; i<argc-1; i++){
+		printf("Current E = %lf\n", E0[i]);
+		p0 = sqrt(2*E0[i]);
+		/*the plans have to be made befor initialize(), 
+		  because FFTW_MEASURE will override the arrays*/
+		fft = fftw_plan_dft_1d(N, wave_packet, p_wave_packet, FFTW_FORWARD, FFTW_MEASURE);
+		ifft = fftw_plan_dft_1d(N, p_wave_packet, wave_packet, FFTW_BACKWARD, FFTW_MEASURE);
+		initialize();
+		// f=fopen("result", "w");	
+		// write_file(f);
+		k=0;
+		while(1){
+			k++;
+			evolve();
+			pl=wave_packet[0]*conj(wave_packet[0]);
+			pr=wave_packet[N-1]*conj(wave_packet[N-1]);
+			//Make sure the wavepacket will not spread out
+			if(pr >= 1e-7 || pl >= 1e-7) break;   
+			// if(i%10==0)
+			// 	write_file(f);
+		}
+		printf("Steps take = %d\n", k);
+		// fclose(f);
+		
+		T = get_transprob();
+		f = fopen("transprob", "a");
+		fprintf(f, "%lf, %lf\n", E0[i], T);
+		fclose(f);
 	}
-	fclose(f);
-	
-	T = get_transprob();
-	f = fopen("transprob", "a");
-	fprintf(f, "%lf, %lf\n", E0, T);
-	fclose(f);
+
 	fftw_destroy_plan(fft);
 	fftw_destroy_plan(ifft);
 	return 0;
@@ -120,13 +128,7 @@ void write_file(FILE *f)
 
 double complex Gaussian_wp(double x)
 {
-	double complex w;
-	// double wr,wi;
-	w = exp(-(x-x0)*(x-x0)/(2.0*sigma*sigma))*cexp(I*p0*(x-x0));
-	// wr = creal(w);
-	// wi = cimag(w);
-	// if(wr!=0) printf("%lf + %lfi x=%lf\n", wr, wi, x);
-	return w;
+	return exp(-(x-x0)*(x-x0)/(2.0*sigma*sigma))*cexp(I*p0*(x-x0));
 }
 
 void normalize()
@@ -150,6 +152,7 @@ void normalize()
 }
 
 void evolve()
+// Makes one move
 {
 	int i;
 	for(i=0; i<N; i++){
@@ -164,6 +167,7 @@ void evolve()
 }
 
 double get_transprob()
+// Calculates the transmission probability by trapzoidal integration
 {
 	int i;
 	double ww1, ww2, x, T=0;
