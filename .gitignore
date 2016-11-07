@@ -1,0 +1,8 @@
+*.mp4
+*.pdf
+*.nb
+main/result
+main/main
+main/main.py
+main/run.sh
+main/plot.py
